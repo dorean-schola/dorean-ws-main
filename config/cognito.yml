@@ -1,0 +1,6 @@
+-
+  AttributeDataType: String
+  DeveloperOnlyAttribute: False
+  Mutable: True
+  Required: True
+  Name: email

@@ -1,0 +1,25 @@
+name: ${self:custom.appName}.AppSync
+mappingTemplatesLocation: src/mappingTemplates
+authenticationType: AWS_IAM
+mappingTemplates:
+  - dataSource: TopicsTable
+    type: Query
+    field: GetTopic
+    request: users/getTopic-request.vtl
+    response: users/getTopic-response.vtl
+  - dataSource: TopicsTable
+    type: Query
+    field: ListTopics
+    request: users/ListTopics-request.vtl
+    response: users/ListTopics-response.vtl
+substitutions:
+  TopicsTableName: "${self:custom.TopicsTable}"
+schema: src/schema.graphql
+serviceRole: "AppSyncServiceRole"
+dataSources:
+  - type: AMAZON_DYNAMODB
+    name: TopicsTable
+    description: 'Topics Table'
+    config:
+      tableName: ${self:custom.usersTable}
+      serviceRoleArn: "arn:aws:iam::${self:custom.accountId}:role/${self:custom.appName}-dynamo-AppSyncServiceRole"

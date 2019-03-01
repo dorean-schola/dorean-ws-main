@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"typescript.validate.enable": false,
+		"javascript.validate.enable": false,
+		"editor.tabSize": 2,
+		"files.exclude": {
+			"**/.serverless": true,
+			"**/node_modules": true
+		}
+	}
+}

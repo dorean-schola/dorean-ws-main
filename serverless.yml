@@ -1,0 +1,285 @@
+service: DoreanWsMain
+plugins:
+  - serverless-appsync-plugin
+
+package:
+  exclude:
+    - coverage/**
+
+provider:
+  name: aws
+  runtime: nodejs8.10
+  stage: test
+  region: us-east-1
+  environment:
+    TOPICS_TABLE: ${self:custom.topicsTable}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+      Resource:
+        arn:aws:dynamodb:${self:provider.region}:${self:custom.accountId}:table/${self:custom.topicsTable}
+
+custom:
+  accountId: ${env:AWS_ACCOUNT_ID}
+  graphqlId: ${env:GRAPHQL_ID}
+  stage: ${opt:stage,self:provider.stage}
+  appName: ${self:custom.stage}.${self:service}
+  appSync: ${file(config/appsync.yml)}
+  userPoolId: ${env:USER_POOL_ID}
+  topicsTable: ${self:custom.appName}.Topics
+  lambdaArn: arn:aws:lambda:${self:provider.region}:${self:custom.accountId}:function
+  appsyncArn: arn:aws:appsync:${self:provider.region}:${self:custom.accountId}:apis/${self:custom.graphqlId}
+
+resources:
+  Resources:
+    CognitoUserPoolUsersServiceUserPool:
+      Type: AWS::Cognito::UserPool
+      Properties:
+        UserPoolName: ${self:custom.appName}.UserPool
+        UsernameAttributes:
+          - email
+        AutoVerifiedAttributes:
+          - email
+        Policies:
+          PasswordPolicy:
+            MinimumLength: 6
+            RequireLowercase: false
+            RequireNumbers: true
+            RequireSymbols: false
+            RequireUppercase: false
+        Schema:
+          ${file(infra/cognitoSchema.yml)}
+
+    CognitoUserPoolClient:
+      Type: AWS::Cognito::UserPoolClient
+      Properties:
+        ClientName: ${self:custom.appName}.UserPoolClient
+        UserPoolId:
+          Ref: CognitoUserPoolUsersServiceUserPool
+        ExplicitAuthFlows:
+          - ADMIN_NO_SRP_AUTH
+        GenerateSecret: false
+
+    CognitoIdentityPool:
+      Type: AWS::Cognito::IdentityPool
+      Properties:
+        IdentityPoolName: ${self:custom.appNameWOnly}IdentityPool
+        AllowUnauthenticatedIdentities: false
+        CognitoIdentityProviders:
+          - ClientId:
+              Ref: CognitoUserPoolClient
+            ProviderName:
+              Fn::GetAtt: [ "CognitoUserPoolUsersServiceUserPool", "ProviderName" ]
+
+    CognitoIdentityPoolRoles:
+      Type: AWS::Cognito::IdentityPoolRoleAttachment
+      Properties:
+        IdentityPoolId:
+          Ref: CognitoIdentityPool
+        Roles:
+          authenticated:
+            Fn::GetAtt: [CognitoClientGroupRole, Arn]
+
+    CognitoUserPoolClientGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: 'client'
+        RoleArn:
+          Fn::GetAtt: [CognitoClientGroupRole, Arn]
+        UserPoolId:
+          Ref: CognitoUserPoolUsersServiceUserPool
+
+    CognitoUserPoolAdminGroup:
+      Type: AWS::Cognito::UserPoolGroup
+      Properties:
+        GroupName: 'admin'
+        RoleArn:
+          Fn::GetAtt: [CognitoAdminGroupRole, Arn]
+        UserPoolId:
+          Ref: CognitoUserPoolUsersServiceUserPool
+
+    CognitoAdminGroupRole:
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: 'Allow'
+              Principal:
+                Federated: 'cognito-identity.amazonaws.com'
+              Action:
+                - 'sts:AssumeRoleWithWebIdentity'
+              Condition:
+                StringEquals:
+                  'cognito-identity.amazonaws.com:aud':
+                    Ref: CognitoIdentityPool
+                'ForAnyValue:StringLike':
+                  'cognito-identity.amazonaws.com:amr': authenticated
+        Policies:
+          - PolicyName: 'CognitoAuthorizedPolicy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: 'Allow'
+                  Action:
+                    - 'mobileanalytics:PutEvents'
+                    - 'cognito-sync:*'
+                    - 'cognito-identity:*'
+                    - 'cognito-idp:*'
+                    - 'cognito-idp:*'
+                  Resource:
+                    - Fn::GetAtt: [CognitoUserPoolUsersServiceUserPool, Arn]
+                - Effect: 'Allow'
+                  Action:
+                    - appsync:GraphQL
+                  Resource:
+                    - arn:aws:appsync:${self:provider.region}:${self:custom.accountId}:apis/${self:custom.graphqlId}/*
+
+    CognitoClientGroupRole:
+      Type: AWS::IAM::Role
+      Properties:
+        Path: /
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: 'Allow'
+              Principal:
+                Federated: 'cognito-identity.amazonaws.com'
+              Action:
+                - 'sts:AssumeRoleWithWebIdentity'
+              Condition:
+                StringEquals:
+                  'cognito-identity.amazonaws.com:aud':
+                    Ref: CognitoIdentityPool
+                'ForAnyValue:StringLike':
+                  'cognito-identity.amazonaws.com:amr': authenticated
+            - Effect: 'Allow'
+              Principal:
+                Service: 's3.amazonaws.com'
+              Action:
+                - 'sts:AssumeRole'
+        Policies:
+          - PolicyName: 'CognitoAuthorizedPolicy'
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: 'Allow'
+                  Action:
+                    - appsync:GraphQL
+                  Resource:
+                    - ${self:custom.appsync}/*
+                - Effect: Deny
+                  Action:
+                    - appsync:GraphQL
+                  Resource:
+                    - ${self:custom.appsync}/types/Query/fields/GetTopic
+                    - ${self:custom.appsync}/types/Query/fields/GetTopics
+                    - ${self:custom.appsync}/types/Mutation/fields/CreateTopic
+    AppSyncDynamoDBServiceRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: ${self:custom.appName}-dynamo-AppSyncServiceRole
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            -appName
+              Effect: "Allow"
+              Principal:
+                Service:
+                  - "appsync.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+        Policies:
+          -
+            PolicyName: "AppSyncDynamoDBReadOnly"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                    - "dynamodb:GetItem"
+                    - "dynamodb:BatchGetItem"
+                    - "dynamodb:Scan"
+                    - "dynamodb:Query"
+                    - "dynamodb:PutItem"
+                    - "dynamodb:UpdateItem"
+                  Resource:
+                    - "arn:aws:dynamodb:${self:provider.region}:${self:custom.accountId}:*"
+
+    AppSyncLambdaServiceRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: ${self:custom.appName}-lambda-AppSyncServiceRole
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            -
+              Effect: "Allow"
+              Principal:
+                Service:
+                  - "appsync.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+        Policies:
+          -
+            PolicyName: "AppSyncTopicLambdasInvoker"
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                -
+                  Effect: "Allow"
+                  Action:
+                    - "lambda:InvokeFunction"
+                  Resource:
+                    - ${self:custom.lambdaArn}:DoreanWsMain-${self:custom.stage}-*
+
+    TopicsDynamoDBTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: RANGE
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:custom.topicsTable}
+  
+  Outputs:
+    UserPoolId:
+      Value:
+        Ref: CognitoUserPoolUsersServiceUserPool
+
+    UserPoolClientId:
+      Value:
+        Ref: CognitoUserPoolClient
+
+    IdentityPoolId:
+      Value:
+        Ref: CognitoIdentityPool
+
+    TopicsDynamoDBTableName:
+      Value:
+        Ref: TopicsDynamoDBTable
+      Export:
+        Name: ${self:custom.stage}-TopicsDynamoDBTableName
+
+    TopicsDynamoDBTableArn:
+      Value:
+        Fn::GetAtt:
+          - TopicsDynamoDBTable
+          - Arn
+      Export:
+        Name: ${self:custom.stage}-TopicsDynamoDBTableArn

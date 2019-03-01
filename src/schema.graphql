@@ -1,0 +1,20 @@
+type Query {
+  GetTopic: Topic
+  ListTopics: [Topic]
+}
+
+type Mutation {
+  CreateTopic(input: TopicInput!): Topic
+}
+
+type Topic {
+  id: ID!
+  parentTopic: Topic
+  childrenTopics: [Topic]
+}
+
+input CreateTopicInput {
+  parentTopic: ID
+  name: String
+  description: String
+}

@@ -1,0 +1,26 @@
+{
+  "name": "dorean-ws-main",
+  "version": "1.0.0",
+  "description": "Doreán Schola App",
+  "main": "index.js",
+  "engines": {
+    "node": "8.x"
+  },
+  "scripts": {
+    "test": "jest --coverage",
+    "test-dev": "jest --coverage --watch",
+    "lint": "eslint --ignore-path .gitignore -c .eslintrc.js .",
+    "validate-yml": "sls deploy --noDeploy -v",
+    "deploy": "sls deploy -v"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "eslint": "^5.9.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jest": "^22.0.0",
+    "jest": "^23.6.0",
+    "serverless": "^1.35.0",
+    "serverless-appsync-plugin": "^1.0.9"
+  }
+}
