@@ -5,13 +5,13 @@ mappingTemplates:
   - dataSource: TopicsTable
     type: Query
     field: GetTopic
-    request: users/getTopic-request.vtl
-    response: users/getTopic-response.vtl
+    request: topics/getTopic-request.vtl
+    response: topics/getTopic-response.vtl
   - dataSource: TopicsTable
     type: Query
     field: ListTopics
-    request: users/ListTopics-request.vtl
-    response: users/ListTopics-response.vtl
+    request: topics/listTopics-request.vtl
+    response: topics/listTopics-response.vtl
 substitutions:
   TopicsTableName: "${self:custom.topicsTable}"
 schema: src/schema.graphql

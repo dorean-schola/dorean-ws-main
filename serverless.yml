@@ -141,7 +141,7 @@ resources:
                       - ''
                       -
                         - Fn::GetAtt: 
-                          - ${self:custom.appName}.AppSync
+                          - ${self:custom.appSync}
                           - Arn
                         - /*
 
@@ -177,14 +177,38 @@ resources:
                   Action:
                     - appsync:GraphQL
                   Resource:
-                    - ${self:custom.appSync}/*
-                - Effect: Deny
+                    - Fn::Join:
+                      - ''
+                      -
+                        - Fn::GetAtt: 
+                          - ${self:custom.appSync}
+                          - Arn
+                        - /*
+                - Effect: 'Deny'
                   Action:
                     - appsync:GraphQL
                   Resource:
-                    - ${self:custom.appSync}/types/Query/fields/GetTopic
-                    - ${self:custom.appSync}/types/Query/fields/GetTopics
-                    - ${self:custom.appSync}/types/Mutation/fields/CreateTopic
+                    - Fn::Join:
+                      - ''
+                      -
+                        - Fn::GetAtt: 
+                          - ${self:custom.appSync}
+                          - Arn
+                        - /types/Query/fields/GetTopic
+                    - Fn::Join:
+                      - ''
+                      -
+                        - Fn::GetAtt: 
+                          - ${self:custom.appSync}
+                          - Arn
+                        - /types/Query/fields/listTopics
+                    - Fn::Join:
+                      - ''
+                      -
+                        - Fn::GetAtt: 
+                          - ${self:custom.appSync}
+                          - Arn
+                        - /types/Query/fields/CreateTopic
     AppSyncDynamoDBServiceRole:
       Type: "AWS::IAM::Role"
       Properties:
