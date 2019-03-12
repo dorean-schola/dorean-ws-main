@@ -13,6 +13,7 @@ provider:
   region: us-east-1
   environment:
     TOPICS_TABLE: ${self:custom.topicsTable}
+    REGION: ${self:provider.region}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -26,14 +27,11 @@ provider:
 
 custom:
   accountId: ${env:AWS_ACCOUNT_ID}
-  graphqlId: ${env:GRAPHQL_ID}
   stage: ${opt:stage,self:provider.stage}
   appName: ${self:custom.stage}.${self:service}
   appSync: ${file(config/appsync.yml)}
-  userPoolId: ${env:USER_POOL_ID}
   topicsTable: ${self:custom.appName}.Topics
   lambdaArn: arn:aws:lambda:${self:provider.region}:${self:custom.accountId}:function
-  appsyncArn: arn:aws:appsync:${self:provider.region}:${self:custom.accountId}:apis/${self:custom.graphqlId}
 
 resources:
   Resources:
@@ -53,7 +51,7 @@ resources:
             RequireSymbols: false
             RequireUppercase: false
         Schema:
-          ${file(infra/cognitoSchema.yml)}
+          ${file(config/cognito.yml)}
 
     CognitoUserPoolClient:
       Type: AWS::Cognito::UserPoolClient
@@ -68,7 +66,7 @@ resources:
     CognitoIdentityPool:
       Type: AWS::Cognito::IdentityPool
       Properties:
-        IdentityPoolName: ${self:custom.appNameWOnly}IdentityPool
+        IdentityPoolName: ${self:custom.appName}IdentityPool
         AllowUnauthenticatedIdentities: false
         CognitoIdentityProviders:
           - ClientId:
@@ -139,7 +137,13 @@ resources:
                   Action:
                     - appsync:GraphQL
                   Resource:
-                    - arn:aws:appsync:${self:provider.region}:${self:custom.accountId}:apis/${self:custom.graphqlId}/*
+                    - Fn::Join:
+                      - ''
+                      -
+                        - Fn::GetAtt: 
+                          - ${self:custom.appName}.AppSync
+                          - Arn
+                        - /*
 
     CognitoClientGroupRole:
       Type: AWS::IAM::Role
@@ -173,14 +177,14 @@ resources:
                   Action:
                     - appsync:GraphQL
                   Resource:
-                    - ${self:custom.appsync}/*
+                    - ${self:custom.appSync}/*
                 - Effect: Deny
                   Action:
                     - appsync:GraphQL
                   Resource:
-                    - ${self:custom.appsync}/types/Query/fields/GetTopic
-                    - ${self:custom.appsync}/types/Query/fields/GetTopics
-                    - ${self:custom.appsync}/types/Mutation/fields/CreateTopic
+                    - ${self:custom.appSync}/types/Query/fields/GetTopic
+                    - ${self:custom.appSync}/types/Query/fields/GetTopics
+                    - ${self:custom.appSync}/types/Mutation/fields/CreateTopic
     AppSyncDynamoDBServiceRole:
       Type: "AWS::IAM::Role"
       Properties:
@@ -188,7 +192,7 @@ resources:
         AssumeRolePolicyDocument:
           Version: "2012-10-17"
           Statement:
-            -appName
+            -
               Effect: "Allow"
               Principal:
                 Service:

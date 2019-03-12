@@ -21,6 +21,6 @@
     "eslint-plugin-jest": "^22.0.0",
     "jest": "^23.6.0",
     "serverless": "^1.35.0",
-    "serverless-appsync-plugin": "^1.0.9"
+    "serverless-appsync-plugin": "^1.1.0"
   }
 }
